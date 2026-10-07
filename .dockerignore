@@ -1,0 +1,11 @@
+# keep images small + builds reproducible: never copy generated artifacts
+data/raw_extracted.jsonl
+data/validated.jsonl
+backend/fraud.db
+dbdata/
+**/__pycache__/
+*.pyc
+portfolio_screenshots/
+screenshots_draft/
+.git/
+*.zip

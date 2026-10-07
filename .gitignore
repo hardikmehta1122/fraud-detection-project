@@ -1,0 +1,17 @@
+# generated data + model serving DB (regenerate via the pipeline)
+data/raw_extracted.jsonl
+data/validated.jsonl
+backend/fraud.db
+dbdata/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.ruff_cache/
+.pytest_cache/
+
+# packaging + screenshots
+*.zip
+portfolio_screenshots/
+screenshots_draft/

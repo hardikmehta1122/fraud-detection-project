@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docket — Fraud Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="wordmark">
+      <span class="wordmark-mark">▣</span>
+      <span class="wordmark-text">Docket</span>
+    </div>
+    <nav class="rail-nav">
+      <button class="rail-link is-active" data-view="queue">Queue</button>
+      <button class="rail-link" data-view="playground">Playground</button>
+      <button class="rail-link" data-view="live">Live feed</button>
+      <button class="rail-link" data-view="model">Model</button>
+    </nav>
+    <div class="rail-footnote">Fraud review desk<br>Synthetic dataset · 284,807 docs</div>
+  </aside>
+
+  <main class="main">
+
+    <section id="view-queue" class="view">
+      <header class="stat-strip">
+        <div class="stat">
+          <span class="stat-value" id="stat-total">—</span>
+          <span class="stat-label">documents ingested</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-pending">—</span>
+          <span class="stat-label">pending, risk ≥ 0.5</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-approved">—</span>
+          <span class="stat-label">approved</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-rejected">—</span>
+          <span class="stat-label">rejected</span>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="tabs" id="status-tabs">
+          <button class="tab is-active" data-status="">All</button>
+          <button class="tab" data-status="pending">Pending</button>
+          <button class="tab" data-status="approved">Approved</button>
+          <button class="tab" data-status="rejected">Rejected</button>
+        </div>
+        <div class="toolbar-controls">
+          <label class="risk-filter">
+            Min. risk <span id="risk-filter-value">0.00</span>
+            <input type="range" id="risk-filter" min="0" max="1" step="0.01" value="0">
+          </label>
+          <select id="sort-select">
+            <option value="risk_desc">Risk, high → low</option>
+            <option value="risk_asc">Risk, low → high</option>
+            <option value="date_desc">Newest first</option>
+          </select>
+        </div>
+      </div>
+
+      <table class="docket">
+        <thead>
+          <tr>
+            <th class="col-risk">Risk</th>
+            <th>Vendor</th>
+            <th class="col-num">Amount</th>
+            <th>Category</th>
+            <th>Document</th>
+            <th class="col-status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="docket-body">
+          <tr><td colspan="6" class="empty-row">Loading queue…</td></tr>
+        </tbody>
+      </table>
+
+      <div class="pager">
+        <button id="pager-prev">Previous</button>
+        <span id="pager-label">—</span>
+        <button id="pager-next">Next</button>
+      </div>
+    </section>
+
+    <section id="view-model" class="view" hidden>
+      <header class="view-header">
+        <h1>Model performance</h1>
+        <p>XGBoost classifier, evaluated on a held-out test split the model never trained on.</p>
+      </header>
+      <div class="metric-grid" id="metric-grid"></div>
+      <div class="confusion" id="confusion-wrap"></div>
+      <p class="model-note">
+        Threshold chosen on the validation split, then scored once on the test split.
+        Metrics reflect a synthetic dataset; see RESULTS.md for details.
+      </p>
+    </section>
+
+    <section id="view-playground" class="view" hidden>
+      <header class="view-header">
+        <h1>Scoring playground</h1>
+        <p>Set the transaction's attributes to score it against the model. The score and the
+          contributing signals update as you change inputs.</p>
+      </header>
+      <div class="pg-grid">
+        <form id="pg-form" class="pg-form">
+          <div class="pg-field">
+            <label>Amount <output id="pg-amount-out">250</output></label>
+            <input type="range" id="pg-amount" min="1" max="10000" step="1" value="250">
+          </div>
+          <div class="pg-field">
+            <label for="pg-category">Merchant category</label>
+            <select id="pg-category"></select>
+          </div>
+          <div class="pg-field">
+            <label for="pg-payment">Payment method</label>
+            <select id="pg-payment"></select>
+          </div>
+          <div class="pg-field">
+            <label for="pg-currency">Currency</label>
+            <select id="pg-currency"></select>
+          </div>
+          <div class="pg-field">
+            <label for="pg-billing">Billing country</label>
+            <select id="pg-billing"></select>
+          </div>
+          <div class="pg-field">
+            <label for="pg-shipping">Shipping country</label>
+            <select id="pg-shipping"></select>
+          </div>
+          <div class="pg-field">
+            <label>Account age (days) <output id="pg-age-out">400</output></label>
+            <input type="range" id="pg-age" min="0" max="3000" step="1" value="400">
+          </div>
+          <div class="pg-field">
+            <label>Documents in last 24h <output id="pg-velocity-out">1</output></label>
+            <input type="range" id="pg-velocity" min="0" max="30" step="1" value="1">
+          </div>
+          <div class="pg-field">
+            <label>Hour of day <output id="pg-hour-out">14</output></label>
+            <input type="range" id="pg-hour" min="0" max="23" step="1" value="14">
+          </div>
+          <div class="pg-presets">
+            <button type="button" class="btn" id="pg-preset-benign">Load benign example</button>
+            <button type="button" class="btn" id="pg-preset-fraud">Load suspicious example</button>
+          </div>
+        </form>
+
+        <div class="pg-result">
+          <div class="pg-gauge">
+            <div class="pg-score" id="pg-score">—</div>
+            <div class="pg-verdict" id="pg-verdict">adjust inputs to score</div>
+            <div class="pg-bar-track"><div class="pg-bar" id="pg-bar"></div></div>
+            <div class="pg-threshold" id="pg-threshold"></div>
+          </div>
+          <div>
+            <p class="section-label">Top contributing signals</p>
+            <div class="contrib-list" id="pg-contribs"></div>
+          </div>
+          <p class="pg-note">Pushes the score up toward fraud (red) or down toward legit (green).
+            Values are the model's own signed contributions for these exact inputs.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-live" class="view" hidden>
+      <header class="view-header">
+        <h1>Live scoring feed</h1>
+        <p>Transactions scored as they arrive. With the streaming stack running
+          (<code>docker compose up</code>) this reads from the Faust worker over Redpanda;
+          otherwise it shows a rolling sample scored by the model.</p>
+      </header>
+      <div id="live-note" class="live-note" hidden></div>
+      <div id="live-status" class="live-status">Connecting…</div>
+      <table class="docket" id="live-table" hidden>
+        <thead>
+          <tr>
+            <th class="col-risk">Risk</th>
+            <th>Vendor</th>
+            <th class="col-num">Amount</th>
+            <th>Category</th>
+            <th>Document</th>
+            <th class="col-status">Prediction</th>
+          </tr>
+        </thead>
+        <tbody id="live-body"></tbody>
+      </table>
+    </section>
+
+  </main>
+</div>
+
+<div class="drawer-backdrop" id="drawer-backdrop">
+  <div class="drawer" id="drawer">
+    <button class="drawer-close" id="drawer-close">Close</button>
+    <div id="drawer-content"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

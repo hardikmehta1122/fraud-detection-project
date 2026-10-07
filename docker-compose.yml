@@ -1,0 +1,157 @@
+# Real-time fraud scoring stack: producer -> redpanda -> faust-worker,
+# with the API dashboard, Prometheus and Grafana. pipeline-init builds the
+# data, model and serving DB into shared volumes before the rest start.
+
+name: fraud-detection
+
+x-pipeline-env: &pipeline-env
+  RAW_PATH: /app/data/raw_extracted.jsonl
+  VALIDATED_PATH: /app/data/validated.jsonl
+  MODEL_DIR: /app/model
+  DB_PATH: /app/dbdata/fraud.db
+
+volumes:
+  data-vol:
+  model-vol:
+  db-vol:
+  redpanda-vol:
+  prometheus-vol:
+  grafana-vol:
+
+services:
+
+  pipeline-init:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment: *pipeline-env
+    volumes:
+      - data-vol:/app/data
+      - model-vol:/app/model
+      - db-vol:/app/dbdata
+    # idempotent: skip the expensive rebuild if artifacts already exist
+    command: >
+      bash -lc '
+      if [ ! -f /app/dbdata/fraud.db ]; then
+        echo "[init] generating data, validating, training, building serving DB...";
+        python data/generate_data.py &&
+        python -m pipeline.ingest &&
+        python -m model.train &&
+        python -m backend.build_serving_db;
+      else
+        echo "[init] artifacts present, skipping rebuild";
+      fi'
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    volumes:
+      - redpanda-vol:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redpanda-console:
+    image: redpandadata/console:v2.7.2
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DB_PATH: /app/dbdata/fraud.db
+      MODEL_DIR: /app/model
+      REDPANDA_BOOTSTRAP: redpanda:9092   # enables the dashboard's live feed
+      SCORED_TOPIC: transactions.scored
+    ports:
+      - "8000:8000"
+    volumes:
+      - db-vol:/app/dbdata
+      - model-vol:/app/model
+    depends_on:
+      pipeline-init:
+        condition: service_completed_successfully
+      redpanda:
+        condition: service_healthy
+
+  faust-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.stream
+    environment:
+      REDPANDA_BROKER: kafka://redpanda:9092
+      MODEL_DIR: /app/model
+      METRICS_PORT: "9100"
+    ports:
+      - "9100:9100"
+    volumes:
+      - model-vol:/app/model
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      pipeline-init:
+        condition: service_completed_successfully
+
+  producer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.stream
+    environment:
+      REDPANDA_BOOTSTRAP: redpanda:9092
+      VALIDATED_PATH: /app/data/validated.jsonl
+    command: ["python", "-m", "streaming.producer", "--rate", "50", "--loop"]
+    volumes:
+      - data-vol:/app/data
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      faust-worker:
+        condition: service_started
+      pipeline-init:
+        condition: service_completed_successfully
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-vol:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
+      - faust-worker
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-vol:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus

@@ -1,0 +1,20 @@
+# Stream image: Faust worker and Redpanda producer.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt requirements-stream.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-stream.txt
+
+COPY pipeline/ pipeline/
+COPY model/ model/
+COPY streaming/ streaming/
+COPY data/ data/
+
+EXPOSE 9100
+
+CMD ["faust", "-A", "streaming.stream_scorer", "worker", "-l", "info"]

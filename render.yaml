@@ -1,0 +1,23 @@
+# Deploys the dashboard and scoring playground as a single web service.
+# The streaming stack runs locally via docker compose (see README).
+services:
+  - type: web
+    name: fraud-dashboard
+    runtime: docker
+    dockerfilePath: ./docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: /app/entrypoint-api.sh
+    plan: free
+    envVars:
+      - key: DEMO_MODE
+        value: "1"
+      - key: DEMO_N
+        value: "5000"
+      - key: DB_PATH
+        value: /app/dbdata/fraud.db
+      - key: MODEL_DIR
+        value: /app/model
+    disk:
+      name: dbdata
+      mountPath: /app/dbdata
+      sizeGB: 1
