@@ -4,6 +4,7 @@
 set -e
 
 DB="${DB_PATH:-backend/fraud.db}"
+mkdir -p "$(dirname "$DB")"
 
 if [ ! -f "$DB" ] && [ "${DEMO_MODE:-0}" = "1" ]; then
   echo "Building ${DEMO_N:-5000}-row demo serving DB..."

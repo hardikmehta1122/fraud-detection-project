@@ -17,7 +17,3 @@ services:
         value: /app/dbdata/fraud.db
       - key: MODEL_DIR
         value: /app/model
-    disk:
-      name: dbdata
-      mountPath: /app/dbdata
-      sizeGB: 1
